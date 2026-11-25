@@ -308,21 +308,19 @@ class InvoiceController extends Controller
         $filename = "Invoice_{$invoice->customer->name}_{$invoice->month}_{$invoice->year}.pdf";
         $filePath = public_path("invoices/{$filename}");
 
-        if (!file_exists($filePath)) {
-            $carbon = Carbon::parse("1 {$invoice->month} {$invoice->year}");
-            $prev = $carbon->copy()->subMonth();
-            $previousInvoice = Invoice::where('customer_id', $invoice->customer_id)
-                ->where('month', $prev->format('F'))
-                ->where('year', $prev->year)
-                ->first();
+        $carbon = Carbon::parse("1 {$invoice->month} {$invoice->year}");
+        $prev = $carbon->copy()->subMonth();
+        $previousInvoice = Invoice::where('customer_id', $invoice->customer_id)
+            ->where('month', $prev->format('F'))
+            ->where('year', $prev->year)
+            ->first();
 
-            $pdf = PDF::loadView('invoices.pdf', compact('invoice', 'previousInvoice'));
+        $pdf = PDF::loadView('invoices.pdf', compact('invoice', 'previousInvoice'));
 
-            if (!file_exists(public_path('invoices'))) {
-                mkdir(public_path('invoices'), 0777, true);
-            }
-            file_put_contents($filePath, $pdf->output());
+        if (!file_exists(public_path('invoices'))) {
+            mkdir(public_path('invoices'), 0777, true);
         }
+        file_put_contents($filePath, $pdf->output());
 
         if (file_exists($filePath)) {
             return response()->download($filePath, $filename, [

@@ -112,14 +112,13 @@
                     <table>
 
                         @php
-                            $firstDelivery = $invoice->deliveries->first();
-
-                            // Fallback to current month if no deliveries exist
-                            $month = $firstDelivery->month ?? now()->month;
-                            $year = $firstDelivery->year ?? now()->year;
+                            // Month and Year from Invoice, fallback to first delivery or current date
+                            $rawMonth = $invoice->month ?? ($invoice->deliveries->first()->month ?? now()->month);
+                            $rawYear = $invoice->year ?? ($invoice->deliveries->first()->year ?? now()->year);
 
                             // Convert month name to number if needed
-                            $month = is_numeric($month) ? $month : \Carbon\Carbon::parse("1 $month")->month;
+                            $month = is_numeric($rawMonth) ? intval($rawMonth) : \Carbon\Carbon::parse("1 $rawMonth")->month;
+                            $year = intval($rawYear);
 
                             $daysInMonth = \Carbon\Carbon::createFromDate($year, $month, 1)->daysInMonth;
 
@@ -129,7 +128,19 @@
 
                             // Loop through deliveries
                             foreach ($invoice->deliveries as $delivery) {
+                                $delMonth = is_numeric($delivery->month)
+                                    ? intval($delivery->month)
+                                    : \Carbon\Carbon::parse("1 {$delivery->month}")->month;
+                                $delYear = intval($delivery->year ?? $year);
+
+                                if ($delMonth != $month || $delYear != $year) {
+                                    continue;
+                                }
+
                                 $day = intval($delivery->date); // Day of the month
+                                if ($day < 1 || $day > $daysInMonth) {
+                                    continue;
+                                }
 
                                 $rates = is_string($delivery->customer_rates)
                                     ? json_decode($delivery->customer_rates, true)
@@ -137,13 +148,6 @@
 
                                 $dailyUnits = 0;
 
-                                // foreach ($rates as $rate) {
-                                //     if (isset($rate['category_type']) && $rate['category_type'] === '1') {
-                                //         $unit = floatval($rate['unit'] ?? 0);
-                                //         $dailyUnits += $unit;
-                                //         $totalCategoryType1Units += $unit;
-                                //     }
-                                // }
                                 foreach ($rates as $rate) {
                                     if (isset($rate['category_type']) && in_array($rate['category_type'], ['1', 'l'])) {
                                         $unit = floatval($rate['unit'] ?? 0);
@@ -171,18 +175,24 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @for ($i = 1; $i <= ceil($daysInMonth / 3); $i++)
+                            @php
+                                $maxRows = $daysInMonth > 30 ? 11 : 10;
+                            @endphp
+                            @for ($i = 1; $i <= $maxRows; $i++)
+                                @php
+                                    $firstDay = $i <= 10 ? $i : null;
+                                    $secondDay = ($i <= 10 && ($i + 10) <= $daysInMonth) ? ($i + 10) : null;
+                                    $thirdDay = ($i + 20) <= $daysInMonth ? ($i + 20) : null;
+                                @endphp
                                 <tr>
-                                    <td>{{ $i }}</td>
-                                    <td>{{ $dateUnits[$i] ?? 0 }}</td>
+                                    <td>{!! $firstDay ?? '&nbsp;' !!}</td>
+                                    <td>{!! $firstDay ? ($dateUnits[$firstDay] ?? 0) : '&nbsp;' !!}</td>
 
-                                    @php $second = $i + 10; @endphp
-                                    <td>{{ $second <= $daysInMonth ? $second : '' }}</td>
-                                    <td>{{ $second <= $daysInMonth ? $dateUnits[$second] ?? 0 : '' }}</td>
+                                    <td>{!! $secondDay ?? '&nbsp;' !!}</td>
+                                    <td>{!! $secondDay ? ($dateUnits[$secondDay] ?? 0) : '&nbsp;' !!}</td>
 
-                                    @php $third = $i + 20; @endphp
-                                    <td>{{ $third <= $daysInMonth ? $third : '' }}</td>
-                                    <td>{{ $third <= $daysInMonth ? $dateUnits[$third] ?? 0 : '' }}</td>
+                                    <td>{!! $thirdDay ?? '&nbsp;' !!}</td>
+                                    <td>{!! $thirdDay ? ($dateUnits[$thirdDay] ?? 0) : '&nbsp;' !!}</td>
                                 </tr>
                             @endfor
                         </tbody>
